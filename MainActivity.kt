@@ -1,8 +1,11 @@
 package com.example.noor
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.core.content.ContextCompat
@@ -19,6 +22,12 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "status" -> result.success(
                         mapOf("usage" to hasUsage(), "overlay" to Settings.canDrawOverlays(this))
+                    )
+                    "getState" -> result.success(
+                        mapOf(
+                            "confirmed" to prefs.getLong("confirmed", 0L),
+                            "force" to prefs.getBoolean("force", false)
+                        )
                     )
                     "openUsage" -> {
                         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -38,10 +47,22 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "confirm" -> {
-                        prefs.edit().putLong("confirmed", (call.arguments as Number).toLong()).apply()
+                        prefs.edit()
+                            .putLong("confirmed", (call.arguments as Number).toLong())
+                            .putBoolean("force", false)
+                            .apply()
+                        result.success(null)
+                    }
+                    "testLock" -> {
+                        prefs.edit().putBoolean("force", true).apply()
                         result.success(null)
                     }
                     "start" -> {
+                        if (Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                        }
                         ContextCompat.startForegroundService(this, Intent(this, BlockerService::class.java))
                         result.success(null)
                     }
