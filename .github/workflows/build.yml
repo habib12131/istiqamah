@@ -1,0 +1,35 @@
+name: Build Istiqamah APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Create project and build APK
+        run: |
+          set -e
+          flutter create --org com.example --project-name noor --platforms=android noor
+          cd noor
+          flutter pub add adhan geolocator shared_preferences
+          cat > lib/main.dart <<'EOF_DART'
+          import 'dart:async';
+          import 'package:adhan/adhan.dart';
+          import 'package:flutter/material.dart';
+          import 'package:flutter/services.dart';
+          import 'package:geolocator/geolocator.dart';
+          import 'package:shared_preferences/shared_preferences.dart';
+
+          void main() => runApp(const IstiqamahApp());
+
+          class IstiqamahApp extends StatelessWidget 
