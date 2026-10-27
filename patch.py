@@ -45,19 +45,23 @@ open(p, "w", encoding="utf-8").write(s)
 
 # ---- ৩. লোগো: অ্যাপ আইকন + অ্যাপের ভেতরের ছবি
 logo = "../logo.png"
+IMG_CODE = """
+import os
+from PIL import Image
+im = Image.open("../logo.png").convert("RGBA")
+for d, px in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
+    folder = "android/app/src/main/res/mipmap-" + d
+    os.makedirs(folder, exist_ok=True)
+    im.resize((px, px), Image.LANCZOS).save(folder + "/ic_launcher.png")
+os.makedirs("assets", exist_ok=True)
+im.resize((512, 512), Image.LANCZOS).save("assets/logo.png")
+"""
 if os.path.exists(logo):
-    try:
-        from PIL import Image
-    except ImportError:
+    # নতুন প্রসেসে চালাই, যাতে এইমাত্র ইনস্টল করা pillow পাওয়া যায়
+    r = subprocess.run([sys.executable, "-c", IMG_CODE])
+    if r.returncode != 0:
         subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages", "pillow"], check=True)
-        from PIL import Image
-    im = Image.open(logo).convert("RGBA")
-    for d, px in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
-        folder = "android/app/src/main/res/mipmap-" + d
-        os.makedirs(folder, exist_ok=True)
-        im.resize((px, px), Image.LANCZOS).save(folder + "/ic_launcher.png")
-    os.makedirs("assets", exist_ok=True)
-    im.resize((512, 512), Image.LANCZOS).save("assets/logo.png")
+        subprocess.run([sys.executable, "-c", IMG_CODE], check=True)
     t = open("pubspec.yaml", encoding="utf-8").read()
     t = re.sub(r"(?m)^flutter:[ \t]*$", "flutter:\n  assets:\n    - assets/logo.png", t, count=1)
     open("pubspec.yaml", "w", encoding="utf-8").write(t)
