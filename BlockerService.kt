@@ -10,6 +10,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.media.MediaPlayer
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -23,14 +24,28 @@ import android.widget.TextView
 class BlockerService : Service() {
     private val h = Handler(Looper.getMainLooper())
 
-    // ব্লক করা অ্যাপের প্যাকেজ নাম
-    private val blocked = setOf(
-        "com.facebook.katana",
-        "com.facebook.lite",
-        "com.zhiliaoapp.musically",
-        "com.ss.android.ugc.trill",
-        "com.google.android.youtube"
-    )
+    companion object {
+        // ডিফল্ট ব্লক তালিকা (অ্যাপের ভেতর থেকে বদলানো যায়)
+        val DEFAULT_BLOCKED = setOf(
+            "com.facebook.katana", "com.facebook.lite", "com.facebook.orca", "com.facebook.mlite",
+            "com.instagram.android", "com.instagram.barcelona",
+            "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
+            "com.google.android.youtube",
+            "com.snapchat.android", "com.twitter.android",
+            "org.telegram.messenger", "org.telegram.messenger.web",
+            "com.reddit.frontpage", "com.pinterest", "com.linkedin.android",
+            "video.like", "com.imo.android.imoim", "sg.bigo.live", "com.kwai.video",
+            "com.discord", "tv.twitch.android.app", "com.tumblr"
+        )
+    }
+
+    private var mp: MediaPlayer? = null
+
+    private fun blockedSet(): Set<String> {
+        val s = getSharedPreferences("noor", MODE_PRIVATE).getString("blocked", null)
+        return if (s == null) DEFAULT_BLOCKED else s.split(",").filter { it.isNotEmpty() }.toSet()
+    }
+
     private var lastFg = ""
     private var lastQuery = 0L
     private var lastNag = 0L
@@ -53,12 +68,34 @@ class BlockerService : Service() {
         h.post(loop)
     }
 
-    override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
+    override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
+        if (i?.action == "AZAN") playAzan(i?.getStringExtra("name") ?: "")
+        return START_STICKY
+    }
+
+    // res/raw/azan.mp3 থাকলে বাজায়, না থাকলে শুধু নোটিফিকেশন দেয়
+    private fun playAzan(name: String) {
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(3, notif("nag", "আযান – $name", "$name নামাজের সময় হয়েছে"))
+        val res = resources.getIdentifier("azan", "raw", packageName)
+        if (res == 0) return
+        try {
+            mp?.release()
+            val m = MediaPlayer.create(this, res) ?: return
+            m.setOnCompletionListener {
+                it.release()
+                mp = null
+            }
+            m.start()
+            mp = m
+        } catch (_: Exception) {}
+    }
     override fun onBind(i: Intent?): IBinder? = null
 
     override fun onDestroy() {
         h.removeCallbacks(loop)
         hideOverlay()
+        mp?.release()
         super.onDestroy()
     }
 
@@ -155,7 +192,7 @@ class BlockerService : Service() {
             (last != null && last > p.getLong("confirmed", 0L))
         updateForeground(now)
 
-        if (locked && lastFg in blocked) showOverlay() else hideOverlay()
+        if (locked && lastFg in blockedSet()) showOverlay() else hideOverlay()
         if (!locked) return
 
         if (now - lastNag > 5 * 60_000) {
